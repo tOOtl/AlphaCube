@@ -104,8 +104,10 @@ class Cube(object):
     is solved with c.solved().
     """
 
-    def __init__(self):
+    def __init__(self, alg=None):
         self.cube = [[[i for _ in range(3)] for _ in range(3)] for i in range(6)]
+        if alg:
+            self.apply_alg(alg)
 
     def __repr__(self):
         return str(self.cube)
@@ -268,8 +270,7 @@ class Cube(object):
 
     def _cycle_stickers(self, *args):
         t = self.cube[args[len(args)-1][0]][args[len(args)-1][1]][args[len(args)-1][2]]
-        loop = range(len(args))
-        loop.reverse()
+        loop = range(len(args)-1, 0, -1)
         for i in loop:
             if i > 0:
                 self.cube[args[i][0]][args[i][1]][args[i][2]] = self.cube[args[i-1][0]][args[i-1][1]][args[i-1][2]]
@@ -277,8 +278,7 @@ class Cube(object):
 
     def _cycle_rows(self, *args):
         t = self.cube[args[len(args)-1][0]][args[len(args)-1][1]]
-        loop = range(len(args))
-        loop.reverse()
+        loop = range(len(args)-1, 0, -1)
         for i in loop:
             if i > 0:
                 self.cube[args[i][0]][args[i][1]] = self.cube[args[i-1][0]][args[i-1][1]]
