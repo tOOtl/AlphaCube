@@ -6,16 +6,16 @@ These features are currently hard-coded for 3x3.
 
 import numpy as np
 
-def stickers_feature(cube):
+def _stickers_feature(cube):
     # Feature of shape (faces, rows, cols, colours)
     feature = np.zeros((6, 3, 3, 6), dtype=np.bool)
     for i, face in enumerate(cube.cube):
         for j, row in enumerate(face):
             for k, colour in enumerate(row):
                 feature[i][j][k][colour] = 1
-    return feature
+    return feature.flatten()
 
-def two_by_two_blocks_feature(cube):
+def _two_by_two_blocks_feature(cube):
     feature = np.zeros((6, 4), dtype=np.bool)
     for face in range(6):
         # x and y indicate the position of the block's upper left corner
@@ -26,9 +26,9 @@ def two_by_two_blocks_feature(cube):
                                         == f[x][y+1]
                                         == f[x+1][y]
                                         == f[x+1][y+1])
-    return feature
+    return feature.flatten()
 
-def corner_edge_block_feature(cube):
+def _corner_edge_block_feature(cube):
     feature = np.zeros((6, 8), dtype=np.bool)
     for face in range(6):
         f = cube.cube[face]
@@ -48,13 +48,31 @@ def corner_edge_block_feature(cube):
         feature[face][6] = f[2][2] == f[2][1]
         # DR corner + R edge
         feature[face][7] = f[2][2] == f[1][2]
-    return feature
+    return feature.flatten()
 
-def centre_edge_block_feature(cube):
+def _centre_edge_block_feature(cube):
+    # A block is formed when one of the numbered stickers below (its block_no)
+    # matches the centre colour, C.
+    # -------------
+    # |   | 0 |   |
+    # -------------
+    # | 1 | C | 2 |
+    # -------------
+    # |   | 3 |   |
+    # -------------
+
     feature = np.zeros((6, 4), dtype=np.bool)
     for face in range(6):
         f = cube.cube[face]
         centre = f[1][1]
         for block_no, edge in enumerate(((0,1), (1,0), (1,2), (2,1))):
             feature[face][block_no] = centre == f[edge[0]][edge[1]]
-    return feature
+    return feature.flatten()
+
+def get_features(cube):
+    return np.concatenate([
+                _stickers_feature(cube),
+                _two_by_two_blocks_feature(cube),
+                _corner_edge_block_feature(cube),
+                _centre_edge_block_feature(cube)
+                ])
