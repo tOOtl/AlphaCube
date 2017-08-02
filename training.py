@@ -7,16 +7,22 @@ MOVE_ENCODING = [face + magnitude
                     for face in rubik.FACE_MOVES
                     for magnitude in ("", "2", "'")]
 
-def load_data(path):
+def load_data(path, type, training_set_size=0.9, limit=-1):
 
-    num_items = 0
-    lines = []
+    assert type in {"value", "policy"}, "Invalid type for training data: {}".format(type)
+
     with open(path, "r") as f:
-        for line in f:
-            lines.append(line)
-            num_items += 1
+        lines = f.readlines()
+        np.random.shuffle(lines)
+        if limit > 0:
+            lines = lines[:limit]
+            num_items = limit
+        else:
+            num_items = len(lines)
 
-    num_training_items = int(num_items * 0.9)
+    print("Number of items in data set is {}".format(num_items))
+
+    num_training_items = int(num_items * training_set_size)
     #print("Creating data")
     x_train = np.array([get_features(rubik.Cube(alg=rubik.Algorithm(line)))
                             for line in lines[:num_training_items]],
@@ -27,16 +33,28 @@ def load_data(path):
                             dtype=np.bool)
     #print("Done creating x_test")
 
-    y_train = np.array([MOVE_ENCODING.index(rubik.Algorithm(line).moves[-1].invert())
-                            for line in lines[:num_training_items]])
-    y_train = np_utils.to_categorical(y_train, 18)
-    #print("Done creating y_train")
-    y_test = np.array([MOVE_ENCODING.index(rubik.Algorithm(line).moves[-1].invert())
-                            for line in lines[num_training_items:]])
-    y_test = np_utils.to_categorical(y_test, 18)
-    #print("Done creating y_test")
+    # Generate target output values indicating the next move that should
+    # be performed based on the input scramble.
+    if type == "policy":
+        y_train = np.array([MOVE_ENCODING.index(rubik.Algorithm(line).moves[-1].invert())
+                                for line in lines[:num_training_items]])
+        y_train = np_utils.to_categorical(y_train, 18)
+        #print("Done creating y_train")
+        y_test = np.array([MOVE_ENCODING.index(rubik.Algorithm(line).moves[-1].invert())
+                                for line in lines[num_training_items:]])
+        y_test = np_utils.to_categorical(y_test, 18)
+        #print("Done creating y_test")
+
+    # Generate target output values according to the length of the
+    # input scramble
+    elif type == "value":
+        y_train = np.array([len(line) // 3 for line in lines[:num_training_items]])
+        y_test = np.array([len(line) // 3 for line in lines[num_training_items:]])
 
     return (x_train, x_test), (y_train, y_test)
+
+
+
 
 if __name__ == "__main__":
     load_data("/Users/Zak/Desktop/MScCS/Project/DataGenerator/one_move_scrambles.txt")
