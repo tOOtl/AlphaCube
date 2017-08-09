@@ -2,7 +2,10 @@
 A barebones cube class for maximising data loading speed during training.
 """
 
-FACES = [face for face in "ULFRBD"]
+from itertools import chain
+
+FACES = "ULFRBD" # This matches the order they appear in the Cube object
+MOVES = [face + magnitude for face in FACES for magnitude in ("", "2", "'")]
 CHAR_TO_NUMBER = {"2" : 2, "'" : 3}
 NUMBER_TO_CHAR = {1 : "", 2 : "2", 3 : "'"}
 
@@ -62,6 +65,8 @@ class Cube:
 
 
     def is_solved(self):
+        # In the value network test, it wasn't always detecting if the cube
+        # was solved, so maybe this isn't working...
         return all([self.cube[face][0] == self.cube[face][1] == self.cube[face][2]
                         for face in range(6)])
 
@@ -70,6 +75,8 @@ class Cube:
             self.apply_move(move)
 
     def apply_move(self, move):
+        if isinstance(move, str):
+            move = Move(move)
         # Rotate the stickers on the face
         # First cycle is corners, second is edges
         f = FACES.index(move.letter)
@@ -188,9 +195,14 @@ class Cube:
             self.cube[args[i][0]][args[i][1]] = self.cube[args[i-1][0]][args[i-1][1]]
         self.cube[args[0][0]][args[0][1]] = temp
 
+    def legal_moves(self):
+        return MOVES 
+
+    def hashable_repr(self):
+        return "".join([str(sticker) for sticker in chain(*chain(*self.cube))])
 
     def __str__(self):
-        indent = " " * 7
+        indent = " " * (((len(str(self.cube[0][0][0])) + 1) * 3) + 1)
         face_one = "\n".join([indent + " ".join(
                         [str(self.cube[0][row][col]) for col in range(3)])
                             for row in range(3)])
@@ -203,3 +215,8 @@ class Cube:
                             for row in range(3)])
         s = "\n\n".join([face_one, faces_two_to_five, face_six])
         return s
+
+if __name__ == "__main__":
+    c = Cube()
+    print(c.hashable_repr())
+    print(c)
