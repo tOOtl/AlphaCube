@@ -1,5 +1,5 @@
 import numpy as np
-import rubik.rubik as rubik
+import mincube as rubiks # TODO: CHANGE TO MINCUBE
 from features import get_features
 import training
 import time
@@ -9,6 +9,11 @@ import tensorflow as tf
 from keras.models import Sequential, load_model
 from keras.layers import Dense
 from keras.metrics import top_k_categorical_accuracy
+
+MODEL = None
+PATH_BASE = "/Users/Zak/Desktop/MScCS/Project/"
+MODEL_PATH = PATH_BASE + "AlphaCube/saved_models/policy/500k_test.h5"
+DATA_PATH_BASE =  PATH_BASE + "DataGenerator/data/"
 
 # Define custom metrics
 
@@ -31,9 +36,7 @@ def close_to_winner(y_true, y_pred):
 
 def main():
 
-    path_base = "/Users/Zak/Desktop/MScCS/Project/DataGenerator/data/"
-
-    sample_input = training.get_features(rubik.Cube())
+    sample_input = training.get_features(rubiks.Cube())
 
     # Model architecture
     model = Sequential()
@@ -44,12 +47,12 @@ def main():
 
     model.compile(loss="categorical_crossentropy",
                     optimizer="adam",
-                    metrics=["accuracy", top_k_categorical_accuracy])
+                    metrics=["accuracy", top_3])
 
     for depth in range(1, 21):
         print("Starting depth {}".format(depth))
         t = time.time()
-        path = path_base + str(depth) + "_move_scrambles.txt"
+        path = DATA_PATH_BASE + str(depth) + "_move_scrambles.txt"
         (x_train, x_test), (y_train, y_test) = training.load_data(path, "policy")
         print("Loading data took {}s".format(format((time.time() - t), ".3f")))
 
@@ -63,14 +66,21 @@ def main():
             print("{}: {}".format(name, value))
         print()
 
-        model.save("/Users/Zak/Desktop/MScCS/Project/AlphaCube/saved_models/SLModel_test_32_100_100.h5")
+        model.save(MODEL_PATH)
 
+def evaluate(state):
+    global MODEL
+    if MODEL == None:
+        MODEL = load_model(MODEL_PATH, custom_objects={"top_3":top_3})
+    prediction = MODEL.predict(np.array([get_features(state)]))
+    return prediction[0]
 
 def one_hot_to_move(arr):
-    return training.MOVE_ENCODING[np.argmax(arr)]
+    return rubiks.MOVES[np.argmax(arr)]
 
 if __name__ == "__main__":
 
+    """
     pred = K.constant([[0.39, 0.4, 0.21], [0.5, 0.02, 0.48]])
     true = K.constant([[1.0, 0.0, 0.0], [0.0, 0.0, 1.0]])
 
@@ -88,14 +98,15 @@ if __name__ == "__main__":
     print(res)
 
     quit()
+    """
 
 
     np.random.seed(17)
 
     #main()
 
-    model = load_model("/Users/Zak/Desktop/MScCS/Project/AlphaCube/saved_models/SLModel_test_32_100_100.h5")
-    datapath = "/Users/Zak/Desktop/MScCS/Project/DataGenerator/data/mixed_length_scrambles.txt"
+    model = load_model(MODEL_PATH, custom_objects={"top_3":top_3})
+    datapath = DATA_PATH_BASE + "mixed_length_scrambles.txt"
     (x, x_test), (y, y_test) = training.load_data(datapath, "policy", training_set_size=0, limit=10000)
 
     score = model.evaluate(x_test, y_test, verbose=1)
@@ -107,7 +118,7 @@ if __name__ == "__main__":
 
     print("Sample predictions:\n")
     results = model.predict(x_test)
-    moves = training.MOVE_ENCODING
+    moves = rubiks.MOVES
     print("\tPrediction\tConfidence\tExpected\tConfidence\tDifference")
     for i, (prediction, expected) in enumerate(zip(results, y_test)):
         prediction_confidence = max(prediction)
@@ -121,4 +132,4 @@ if __name__ == "__main__":
                                     format(expected_confidence, "0.6f"),
                                     format(diff, "0.6f")
                                     ))
-        if i == 20: break
+        if i == 10: break

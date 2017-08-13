@@ -53,6 +53,7 @@ class Algorithm:
     def __str__(self):
         return " ".join([str(m) for m in self.moves])
 
+MOVES_OBJS = [Move(m) for m in MOVES]
 
 class Cube:
 
@@ -61,8 +62,12 @@ class Cube:
                                 for _ in range(3)]
                                   for colour in range(6)]
         if alg:
-            self.apply_alg(Algorithm(alg))
-
+            if isinstance(alg, str):
+                # alg is passed as a string
+                self.apply_alg(Algorithm(alg))
+            else:
+                # alg is passed as an Algorithm object
+                self.apply_alg(alg)
 
     def is_solved(self):
         # In the value network test, it wasn't always detecting if the cube
@@ -147,20 +152,20 @@ class Cube:
 
         elif move.letter == "R":
             if move.number == 1:
-                self._cycle_stickers((0, 2, 2), (4, 2, 0), (5, 0, 2), (2, 2, 2))
-                self._cycle_stickers((0, 2, 1), (4, 1, 0), (5, 1, 2), (2, 1, 2))
-                self._cycle_stickers((0, 2, 0), (4, 0, 0), (5, 2, 2), (2, 0, 2))
+                self._cycle_stickers((0, 2, 2), (4, 0, 0), (5, 2, 2), (2, 2, 2))
+                self._cycle_stickers((0, 1, 2), (4, 1, 0), (5, 1, 2), (2, 1, 2))
+                self._cycle_stickers((0, 0, 2), (4, 2, 0), (5, 0, 2), (2, 0, 2))
             elif move.number == 2:
                 self._cycle_stickers((0, 2, 2), (5, 2, 2))
                 self._cycle_stickers((4, 0, 0), (2, 2, 2))
-                self._cycle_stickers((0, 2, 1), (5, 1, 2))
+                self._cycle_stickers((0, 1, 2), (5, 1, 2))
                 self._cycle_stickers((4, 1, 0), (2, 1, 2))
-                self._cycle_stickers((0, 2, 0), (5, 0, 2))
+                self._cycle_stickers((0, 0, 2), (5, 0, 2))
                 self._cycle_stickers((4, 2, 0), (2, 0, 2))
             elif move.number == 3:
                 self._cycle_stickers((2, 2, 2), (5, 0, 2), (4, 2, 0), (0, 2, 2))
-                self._cycle_stickers((2, 1, 2), (5, 1, 2), (4, 1, 0), (0, 2, 1))
-                self._cycle_stickers((2, 0, 2), (5, 2, 2), (4, 0, 0), (0, 2, 0))
+                self._cycle_stickers((2, 1, 2), (5, 1, 2), (4, 1, 0), (0, 1, 2))
+                self._cycle_stickers((2, 0, 2), (5, 2, 2), (4, 0, 0), (0, 0, 2))
 
         elif move.letter == "B":
             if move.number == 1:
@@ -196,7 +201,7 @@ class Cube:
         self.cube[args[0][0]][args[0][1]] = temp
 
     def legal_moves(self):
-        return MOVES 
+        return MOVES_OBJS
 
     def hashable_repr(self):
         return "".join([str(sticker) for sticker in chain(*chain(*self.cube))])
