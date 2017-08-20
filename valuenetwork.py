@@ -9,41 +9,53 @@ from keras.layers import Dense
 
 MODEL = None
 PATH_BASE = "/Users/Zak/Desktop/MScCS/Project/"
-MODEL_PATH = PATH_BASE + "AlphaCube/saved_models/value/160k_2phase_items.h5"
+MODEL_PATH = PATH_BASE + "AlphaCube/saved_models/value/310k_with_200_100_100.h5"
 DATA_PATH_BASE =  PATH_BASE + "DataGenerator/data/"
 
-def main():
+def train(save_path, *data_paths):
 
-    path_base = "/Users/Zak/Desktop/MScCS/Project/DataGenerator/data/"
     sample_input = training.get_features(rubiks.Cube())
 
     # Model architecture
     model = Sequential()
-    model.add(Dense(32, activation="relu", input_dim=len(sample_input)))
-    model.add(Dense(100, activation="relu"))
-    model.add(Dense(100, activation="relu"))
+    model.add(Dense(200, activation="relu", input_dim=len(sample_input)))
+    #model.add(Dense(100, activation="relu"))
+    #model.add(Dense(100, activation="relu"))
     model.add(Dense(1, activation="linear"))
 
     model.compile(loss="mean_squared_error",
                     optimizer="adam",
                     metrics=["accuracy"])
 
-    # Load training data
-    t = time.time()
-    path = DATA_PATH_BASE + "random_move_scrambles.txt"
-    (x_train, x_test), (y_train, y_test) = training.load_data(path, "value")
-    print("Loading data took {}s".format(format((time.time() - t), ".3f")))
+    grouped_x_train = np.empty((0, len(sample_input)))
+    grouped_y_train = np.empty((0))
+    grouped_x_test = np.empty((0, len(sample_input)))
+    grouped_y_test = np.empty((0))
+
+    for path in data_paths:
+        # Load training data
+        t = time.time()
+        (x_train, x_test), (y_train, y_test) = training.load_data(path, "value", limit=-1)
+        print("Loading data took {}s".format(format((time.time() - t), ".3f")))
+
+        grouped_x_train = np.concatenate((grouped_x_train, x_train))
+        grouped_y_train = np.concatenate((grouped_y_train, y_train))
+        grouped_x_test = np.concatenate((grouped_x_test, x_test))
+        grouped_y_test = np.concatenate((grouped_y_test, y_test))
 
     # Train model
-    model.fit(x_train, y_train, batch_size=32, epochs=10, verbose=1)
-    model.save(MODEL_PATH)
-
+    model.fit(grouped_x_train, grouped_y_train,
+                batch_size=32, epochs=10, verbose=1)
+    model.save(save_path)
     # Test model
-    score = model.evaluate(x_test, y_test, verbose=1)
+    score = model.evaluate(grouped_x_test, grouped_y_test, verbose=1)
     print()
     for name, value in zip(model.metrics_names, score):
         print("{}:\t{}".format(name, value))
     print()
+
+    global MODEL
+    MODEL = model
 
 
 def evaluate(cube):
@@ -63,8 +75,14 @@ def evaluate(cube):
 
 if __name__ == "__main__":
 
+    np.random.seed(17)
 
-    #main()
+    paths = [
+        DATA_PATH_BASE + "mixed_length_scrambles.txt",
+        DATA_PATH_BASE + "random_move_scrambles_less_than_15.txt"
+    ]
+
+    train(MODEL_PATH, *paths)
 
 
 

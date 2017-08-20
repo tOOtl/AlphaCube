@@ -24,11 +24,34 @@ class TestMoveClass(unittest.TestCase):
 
 class TestAlgorithmClass(unittest.TestCase):
 
-    def test_construction(self):
-        pass
+    def test_one_move_alg_construction(self):
+        for move in rubiks.MOVES:
+            alg = rubiks.Algorithm(move)
+            self.assertEqual(str(alg), move)
+
+    def test_longer_alg_construction(self):
+        alg = rubiks.Algorithm("R U R' U'")
+        self.assertEqual(str(alg), "R U R' U'")
+        alg = rubiks.Algorithm("U R' F2 L B' D2")
+        self.assertEqual(str(alg), "U R' F2 L B' D2")
+        alg = rubiks.Algorithm("R U R' U' R' F R2 U' R' U' R U R' F'")
+        self.assertEqual(str(alg), "R U R' U' R' F R2 U' R' U' R U R' F'")
 
     def test_methods(self):
-        pass
+        # T-Perm
+        alg = rubiks.Algorithm("R U R' U' R' F R2 U' R' U' R U R' F'")
+        alg.invert()
+        self.assertEqual(str(alg), "F R U' R' U R U R2 F' R U R U' R'")
+        alg.invert()
+        self.assertEqual(str(alg), "R U R' U' R' F R2 U' R' U' R U R' F'")
+        # Scramble taken from qqtimer, inverted with crider's algtrans
+        alg = rubiks.Algorithm("D B L D' F B' R' F B2 U R2 B' L2 D2 F' B' L2 D2 B' U2 R2")
+        alg.invert()
+        self.assertEqual(str(alg), "R2 U2 B D2 L2 B F D2 L2 B R2 U' B2 F' R B F' D L' B' D'")
+        alg.invert()
+        self.assertEqual(str(alg), "D B L D' F B' R' F B2 U R2 B' L2 D2 F' B' L2 D2 B' U2 R2")
+
+
 
 
 class TestCubeClass(unittest.TestCase):
@@ -164,6 +187,8 @@ class TestCubeClass(unittest.TestCase):
                       + "333333333"
                       + "044044044"
                       + "554554554")
+        print("R")
+        print(c)
 
     def test_R2(self):
         c = rubiks.Cube(alg="R2")
@@ -174,6 +199,8 @@ class TestCubeClass(unittest.TestCase):
                       + "333333333"
                       + "244244244"
                       + "550550550")
+        print("R2")
+        print(c)
 
     def test_R_prime(self):
         c = rubiks.Cube(alg="R'")
@@ -184,6 +211,8 @@ class TestCubeClass(unittest.TestCase):
                       + "333333333"
                       + "544544544"
                       + "552552552")
+        print("R'")
+        print(c)
 
     def test_B(self):
         c = rubiks.Cube(alg="B")
@@ -246,7 +275,30 @@ class TestCubeClass(unittest.TestCase):
                       + "555555555")
 
 
+    def test_move_inversions(self):
+        for move in rubiks.MOVES:
+            c = rubiks.Cube(alg=move)
+            c.apply_move(rubiks.Move(move).inverse())
+            self.assertTrue(c.is_solved(),
+                            msg="{} was not solved by its inverse".format(move))
 
+    def test_move_repetitions(self):
+        for move in rubiks.MOVES:
+            c = rubiks.Cube()
+            m = rubiks.Move(move)
+            for _ in range(4):
+                c.apply_move(m)
+            self.assertTrue(c.is_solved(),
+                            msg="cube was not solved after 4 {} moves".format(move))
+
+    def test_construction_with_alg(self):
+        for move in rubiks.MOVES:
+            c1 = rubiks.Cube(alg=move)
+            c2 = rubiks.Cube()
+            m = rubiks.Move(move)
+            c2.apply_move(m)
+            self.assertEqual(str(c1), str(c2),
+                            msg="cube did not initialise properly with alg={}".format(move))
 
 if __name__ == "__main__":
     unittest.main()
