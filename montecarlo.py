@@ -1,9 +1,32 @@
 import numpy as np
 from copy import deepcopy
+from collections import OrderedDict
 from time import time, sleep
 
-def random_rollout(state):
-    return np.random.choice(state.legal_moves())
+class Rollout:
+
+    """
+    Abstract class for rollouts.
+    """
+
+    def rollout(self, state, history):
+        """
+        Takes the current state, and a history of states that have been visited
+        during this rollout, and returns a move choice. History is available
+        so that we can avoid cycles.
+        """
+        raise NotImplementedError
+
+class RandomRollout(Rollout):
+    """
+    Generic light rollout that can be used for any state space.
+    """
+    def rollout(self, state, history=None):
+        return np.random.choice(state.legal_moves())
+
+# TODO: add an object that enforces the interface I need
+# ie legal_moves, hashable_repr, is_solved, apply_move
+
 
 class MonteCarlo:
 
@@ -48,7 +71,7 @@ class MonteCarlo:
                 state_evaluation_function,
                 moves_evaluation_function,
                 search_time=100,
-                rollout_type=random_rollout,
+                rollout_type=RandomRollout(),
                 rollout_depth=20):
         # The state we start our search from
         self.root = root
@@ -58,8 +81,9 @@ class MonteCarlo:
         self.evaluate_moves = moves_evaluation_function
         # The time limit for building the search tree, in seconds
         self.search_time = search_time
-        # The function used to play the rollouts, should return a value in [0, 1]
-        self.rollout = rollout_type
+        # The function used to play the rollouts
+        assert isinstance(rollout_type, Rollout)
+        self.rollout = rollout_type.rollout
         # The max number of moves the rollout will proceed for w/o winning
         self.rollout_depth = rollout_depth
         # Dict of nodes in the search tree
@@ -156,19 +180,21 @@ class MonteCarlo:
         """
         Plays out the game from a newly expanded node.
         """
-        rollout_moves = []
+        # TODO: Prevent this from looping
+        # might be best to switch rollout_moves to a dict keyed by the state
+        # although then the moves wouldn't be in order... Could use collections.ordered_dict
+        rollout_moves = OrderedDict()
         max_value = self.evaluate_state(state)
         for step in range(self.rollout_depth):
             if state.is_solved():
-                # Need to handle solved stuff here...
-                return max_value, rollout_moves
+                return max_value, rollout_moves.values()
             next_move = self.rollout(state=state)
             state.apply_move(next_move)
-            rollout_moves.append(str(next_move))
+            rollout_moves[state.hashable_repr()] = str(next_move)
             max_value = max(max_value, self.evaluate_state(state))
             if max_value > self.best_state_value:
                 self.best_state_value = max_value
-                self.best_state_moves = " ".join([str(v[1]) for v in visited] + ["*"] + rollout_moves)
+                self.best_state_moves = " ".join([str(v[1]) for v in visited] + ["*"] + rollout_moves.values())
                 self.best_state_str = str(state)
         return max_value, None
 
