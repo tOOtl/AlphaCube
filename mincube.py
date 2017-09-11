@@ -1,5 +1,7 @@
 """
 A barebones cube class for maximising data loading speed during training.
+
+Thanks to David Adams and his rubiks library for some of the ideas here.
 """
 
 from itertools import chain
@@ -53,6 +55,9 @@ class Algorithm:
         for move in self.moves:
             move.invert()
 
+    def inverse(self):
+        return Algorithm(" ".join([str(m.inverse()) for m in self.moves[::-1]]))
+
     def __str__(self):
         return " ".join([str(m) for m in self.moves])
 
@@ -73,16 +78,10 @@ class Cube:
                 self.apply_alg(alg)
 
     def is_solved(self):
-        # In the value network test, it wasn't always detecting if the cube
-        # was solved, so maybe this isn't working...
         c = self.cube
-        if all([len(set(c[f][0])
+        return all([len(set(c[f][0])
                         .union(set(c[f][1]))
-                        .union(set(c[f][2]))) == 1 for f in range(6)]):
-            #print(str(self.cube))
-            return True
-        else:
-            return False
+                        .union(set(c[f][2]))) == 1 for f in range(6)])
 
     def apply_alg(self, alg):
         for move in alg.moves:
@@ -210,29 +209,8 @@ class Cube:
         self.cube[args[0][0]][args[0][1]] = temp
 
     def scramble(self, scramble_len=25):
-        assert scramble_len > 0, "Scramble length must be greater than zero"
-        # Free choice of first move
-        move = randint(18)
-        scramble = [move]
-        # Second move is chosen to be on a different face
-        # `move - (move % 3) + 3` gives us the start of the next face's moves
-        # as our base, and `randint` generates an offset from this
-        if scramble_len > 1:
-            move = (move - (move % 3) + 3 + randint(15)) % 18
-            scramble.append(move)
-        # The rest of the moves are chosen to be on a different face to the last
-        # one
-        while len(scramble) < scramble_len:
-            if _axis_of(scramble[-1]) != _axis_of(scramble[-2]):
-                move = (move - (move % 3) + 3 + randint(15)) % 18
-            # If the last two moves were on the same axis, the next move will
-            # be on a different axis, to avoid sequences like `U D U'`
-            else:
-                # Same base-offset system as above, but for axes rather than faces
-                move = (move - (move % 6) + 6 + randint(12)) % 18
-            scramble.append(move)
-        alg = " ".join([AXIS_ORDERED_MOVES[move] for move in scramble])
-        self.apply_alg(Algorithm(alg))
+        self.apply_alg(Algorithm(get_scramble(scramble_len)))
+        return self
 
     def legal_moves(self):
         return MOVES_OBJS
@@ -254,6 +232,33 @@ class Cube:
                             for row in range(3)])
         s = "\n\n".join([face_one, faces_two_to_five, face_six])
         return s
+
+
+def get_scramble(scramble_len=25):
+    assert scramble_len > 0, "Scramble length must be greater than zero"
+    # Free choice of first move
+    move = randint(18)
+    scramble = [move]
+    # Second move is chosen to be on a different face
+    # `move - (move % 3) + 3` gives us the start of the next face's moves
+    # as our base, and `randint` generates an offset from this
+    if scramble_len > 1:
+        move = (move - (move % 3) + 3 + randint(15)) % 18
+        scramble.append(move)
+    # The rest of the moves are chosen to be on a different face to the last
+    # one
+    while len(scramble) < scramble_len:
+        if _axis_of(scramble[-1]) != _axis_of(scramble[-2]):
+            move = (move - (move % 3) + 3 + randint(15)) % 18
+        # If the last two moves were on the same axis, the next move will
+        # be on a different axis, to avoid sequences like `U D U'`
+        else:
+            # Same base-offset system as above, but for axes rather than faces
+            move = (move - (move % 6) + 6 + randint(12)) % 18
+        scramble.append(move)
+
+    alg = " ".join([AXIS_ORDERED_MOVES[move] for move in scramble])
+    return alg
 
 def _axis_of(move):
     return move // 6

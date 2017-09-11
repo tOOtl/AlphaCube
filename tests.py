@@ -4,6 +4,7 @@ Tests for AlphaCube.
 
 import unittest
 import mincube as rubiks
+import numpy as np
 
 class TestMoveClass(unittest.TestCase):
 
@@ -50,6 +51,20 @@ class TestAlgorithmClass(unittest.TestCase):
         self.assertEqual(str(alg), "R2 U2 B D2 L2 B F D2 L2 B R2 U' B2 F' R B F' D L' B' D'")
         alg.invert()
         self.assertEqual(str(alg), "D B L D' F B' R' F B2 U R2 B' L2 D2 F' B' L2 D2 B' U2 R2")
+
+    def test_random_scrambles(self):
+        # Set the seed for reproducibility
+        np.random.seed(123)
+        for _ in range(1000):
+            alg = rubiks.Algorithm(rubiks.get_scramble())
+            c = rubiks.Cube(alg=alg)
+            inv_alg = alg.inverse()
+            c.apply_alg(inv_alg)
+            self.assertTrue(c.is_solved(),
+                    msg="Algorithm did not solve its inverse: \n"
+                            + "Alg={}\n".format(alg)
+                            + "Inverse={}".format(inv_alg))
+
 
 
 
@@ -187,8 +202,6 @@ class TestCubeClass(unittest.TestCase):
                       + "333333333"
                       + "044044044"
                       + "554554554")
-        print("R")
-        print(c)
 
     def test_R2(self):
         c = rubiks.Cube(alg="R2")
@@ -199,8 +212,6 @@ class TestCubeClass(unittest.TestCase):
                       + "333333333"
                       + "244244244"
                       + "550550550")
-        print("R2")
-        print(c)
 
     def test_R_prime(self):
         c = rubiks.Cube(alg="R'")
@@ -211,8 +222,6 @@ class TestCubeClass(unittest.TestCase):
                       + "333333333"
                       + "544544544"
                       + "552552552")
-        print("R'")
-        print(c)
 
     def test_B(self):
         c = rubiks.Cube(alg="B")

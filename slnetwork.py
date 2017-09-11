@@ -12,7 +12,7 @@ from keras.metrics import top_k_categorical_accuracy
 
 MODEL = None
 PATH_BASE = "/Users/Zak/Desktop/MScCS/Project/"
-MODEL_PATH = PATH_BASE + "AlphaCube/saved_models/policy/rl_initialiser_aggregate_with_rand_move_scrambles.h5"
+MODEL_PATH = PATH_BASE + "AlphaCube/saved_models/policy/final.h5"
 DATA_PATH_BASE =  PATH_BASE + "DataGenerator/data/"
 
 # Define custom metrics
@@ -30,8 +30,7 @@ def train(datapaths, aggregate_data=True):
 
     # Model architecture
     model = Sequential()
-    model.add(Dense(32, activation="relu", input_shape=(1,len(sample_input))))
-    model.add(Dense(100, activation="relu"))
+    model.add(Dense(100, activation="relu", input_shape=(1,len(sample_input))))
     model.add(Dense(100, activation="relu"))
     model.add(Flatten())
     model.add(Dense(18, activation="softmax"))
@@ -63,7 +62,7 @@ def train(datapaths, aggregate_data=True):
         shuffle_in_unison(grouped_x_test, grouped_y_test)
 
         model.fit(grouped_x_train, grouped_y_train,
-                batch_size=32, epochs=5, verbose=1)
+                batch_size=32, epochs=10, verbose=1)
 
         score = model.evaluate(grouped_x_test, grouped_y_test, verbose=1)
 
@@ -100,7 +99,7 @@ def evaluate(state):
     global MODEL
     if MODEL == None:
         MODEL = load_model(MODEL_PATH, custom_objects={"top_3":top_3})
-    prediction = MODEL.predict(np.array([get_features(state)]))
+    prediction = MODEL.predict(np.array([[get_features(state)]]))
     return prediction[0]
 
 def one_hot_to_move(arr):
@@ -115,18 +114,24 @@ def shuffle_in_unison(a, b):
 
 if __name__ == "__main__":
 
-    
-    paths = [DATA_PATH_BASE
-            + str(depth)
-            + "_move_scrambles.txt" for depth in range(1, 21)]
-    paths.append(DATA_PATH_BASE + "random_move_scrambles_less_than_15.txt")
-    train(paths, aggregate_data=True)
+    np.random.seed(17)
 
+    # Build list of paths to training data
+    paths = [DATA_PATH_BASE + str(depth) + "_move_scrambles.txt"
+                for depth in range(1, 21)]
+    paths.extend([
+        DATA_PATH_BASE + "mixed_length_scrambles.txt",
+        DATA_PATH_BASE + "random_move_scrambles_less_than_15.txt"
+        ])
+    # Train model
+    train(paths, aggregate_data=True)
+    quit()
+    # Prepare model for evaluation
     model = load_model(MODEL_PATH, custom_objects={"top_3":top_3})
     datapath = DATA_PATH_BASE + "mixed_length_scrambles.txt"
     (x, x_test), (y, y_test) = training.load_data(datapath, "policy", training_set_size=0, limit=10000)
     x_test = x_test.reshape((x_test.shape[0], 1, x_test.shape[1]))
-
+    # Evaluate model
     score = model.evaluate(x_test, y_test, verbose=1)
 
     print("\nEvaluation on mixed length scrambles:")

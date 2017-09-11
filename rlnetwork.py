@@ -31,7 +31,7 @@ PATH_BASE = "/Users/Zak/Desktop/MScCS/Project/AlphaCube/saved_models/"
 SL_PATH = PATH_BASE + "policy/rl_initialiser_aggregate_with_rand_move_scrambles.h5"
 RL_PATH = PATH_BASE + "policy/rl_test.h5"
 MODEL = None
-FAILURE_REWARD = -1
+FAILURE_REWARD = -0.5
 
 class CubeEnv(Env):
     """
@@ -50,20 +50,17 @@ class CubeEnv(Env):
     reward_range = (FAILURE_REWARD, 1)
 
     def _step(self, action):
-        #print "Cube state is:"
-        #print self.cube
-        #print "Move chosen is: ", rubiks.MOVES[action]
         self.cube.apply_move(rubiks.MOVES_OBJS[action])
         self.num_moves += 1
         observation = get_features(self.cube)
-        reward = 0 #FAILURE_REWARD * (self.num_moves // self.move_limit)
+        reward = 0
         done = False
         if self.cube.is_solved():
             done = True
             # Bonus is linearly proportional to the shortness of the solution
             # to reward shorter solutions more
-            bonus = 0 # 0.5 * (1 - ((self.num_moves - 1) / self.move_limit))
-            reward = 1 + bonus
+            bonus = 0.5 * (1 - ((self.num_moves - 1) / self.move_limit))
+            reward = 0.5 + bonus
         elif self.num_moves == self.move_limit:
             done = True
             reward = FAILURE_REWARD
@@ -84,8 +81,6 @@ class CubeEnv(Env):
         return
 
     def _seed(self, seed=None):
-        # Docs don't make it clear what this is meant to do, so let's just
-        # assume this is right
         if seed:
             np.random.seed(seed)
 
@@ -117,55 +112,50 @@ def get_initial_model():
     global MODEL
     if MODEL is None:
         MODEL = load_model(SL_PATH, custom_objects={"top_3":top_3})
-        """
-        MODEL = Sequential()
-        MODEL.add(Dense(32, activation="relu", input_shape=(1,420)))
-        MODEL.add(Dense(100, activation="relu"))
-        MODEL.add(Dense(100, activation="relu"))
-        MODEL.add(Flatten())
-        MODEL.add(Dense(18, activation="softmax"))
-
-        for i in (1, 2):
-            MODEL.layers[i].set_weights(w.layers[i].get_weights())
-        MODEL.layers[-1].set_weights(w.layers[3].get_weights())
-        """
-
     return MODEL
 
-def train():
+def train(min_depth=1, max_depth=20, step_limit=50000, verbose=1, policy=None):
     model = get_initial_model()
     memory = SequentialMemory(limit=50000, window_length=1)
-    policy = rl.policy.EpsGreedyQPolicy(eps=0.1)
+    if not policy:
+        policy = WeightedEpsGreedyQPolicy()
     dqn = DQNAgent(model=model,
                     nb_actions=18,
                     memory=memory,
                     nb_steps_warmup=1000,
                     target_model_update=1e-2,
                     policy=policy)
-    dqn.compile(Adam(lr=1e-3), metrics=['mae'])
-    #dqn.load_weights(SL_PATH)
+    dqn.compile(Adam(lr=1e-3), metrics=['mse'])
 
 
-    for n in range(4, 5):
-        print("\nStarting %s-move scrambles\n" % n)
+    for n in range(min_depth, max_depth+1):
+        print("\nStarting %s-move scrambles" % n)
         env = CubeEnv(scramble_len=n, move_limit=n*2)
-        steps = 500000 #min(100 * (18**n), 50000)
-        dqn.fit(env, nb_steps=steps, verbose=1)
+        # For short scrambles, scale with 18^n so that it's greater than the
+        # number of possible states for that depth
+        steps = min(100 * (18**n), step_limit)
+        dqn.fit(env, nb_steps=steps, verbose=verbose)
         dqn.save_weights(RL_PATH, overwrite=True)
 
     return dqn
-    #dqn.save_weights(PATH_BASE + "policy/rl_backup_" + str(time.time()) + ".h5")
 
-if __name__ == "__main__":
+# Tests are in the file rather than in tests.py because keras-rl is python2
+# and tests.py is python3
 
-    dqn = train()
-    env = CubeEnv(scramble_len=5, move_limit=10)
-    np.random.seed(17)
-    dqn.test(env, nb_episodes=10, visualize=False)
-    quit()
+def test_policies():
 
+    pols = {
+        "Greedy" : rl.policy.GreedyQPolicy(),
+        "Eps 0.1" : rl.policy.EpsGreedyQPolicy(eps=0.1),
+        "Eps 0.2" : rl.policy.EpsGreedyQPolicy(eps=0.2),
+        "Weighted 0.1" : WeightedEpsGreedyQPolicy(eps=0.1),
+        "Weighted 0.2" : WeightedEpsGreedyQPolicy(eps=0.2)
+    }
+    for pol in sorted(pols.keys()):
+        print("\n\n\n~~~~~~~~ {} ~~~~~~~~\n\n".format(pol.upper()))
+        dqn = train(max_depth=10, step_limit=50001, policy=pols[pol])
 
-
+def test_rl_vs_sl():
 
     print("Testing DQN with SL weights:")
     model_sl = load_model(SL_PATH, custom_objects={"top_3":top_3})
@@ -177,7 +167,7 @@ if __name__ == "__main__":
                     nb_steps_warmup=1000,
                     target_model_update=1e-2,
                     policy=policy_sl)
-    dqn_sl.compile(Adam(lr=1e-3), metrics=['mae'])
+    dqn_sl.compile(Adam(lr=1e-3), metrics=['mse'])
     rng_state = np.random.get_state()
     dqn_sl.test(env, nb_episodes=10, visualize=False)
 
@@ -191,7 +181,7 @@ if __name__ == "__main__":
                     nb_steps_warmup=1000,
                     target_model_update=1e-2,
                     policy=policy_rl)
-    dqn_rl.compile(Adam(lr=1e-3), metrics=['mae'])
+    dqn_rl.compile(Adam(lr=1e-3), metrics=['mse'])
     dqn_rl.load_weights(RL_PATH)
     np.random.set_state(rng_state)
     dqn_rl.test(env, nb_episodes=10, visualize=False)

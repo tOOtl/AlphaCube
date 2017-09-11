@@ -24,9 +24,6 @@ class RandomRollout(Rollout):
     def rollout(self, state, history=None):
         return np.random.choice(state.legal_moves())
 
-# TODO: add an object that enforces the interface I need
-# ie legal_moves, hashable_repr, is_solved, apply_move
-
 
 class MonteCarlo:
 
@@ -61,16 +58,17 @@ class MonteCarlo:
             self.value = initial_value
 
         def __str__(self):
-            return "Edge({}, {} visits, {})".format(self.action,
-                                                    self.num_visits,
-                                                    self.value)
+            return "Edge(action={}, num_visits={}, value={})".format(
+                                                                self.action,
+                                                                self.num_visits,
+                                                                self.value
+                                                                )
 
 
     def __init__(self,
                 root,
                 state_evaluation_function,
                 moves_evaluation_function,
-                search_time=100,
                 rollout_type=RandomRollout(),
                 rollout_depth=20):
         # The state we start our search from
@@ -79,10 +77,7 @@ class MonteCarlo:
         self.evaluate_state = state_evaluation_function
         # The function used to give moves their initial value
         self.evaluate_moves = moves_evaluation_function
-        # The time limit for building the search tree, in seconds
-        self.search_time = search_time
         # The function used to play the rollouts
-        assert isinstance(rollout_type, Rollout)
         self.rollout = rollout_type.rollout
         # The max number of moves the rollout will proceed for w/o winning
         self.rollout_depth = rollout_depth
@@ -99,14 +94,13 @@ class MonteCarlo:
         # List of any solutions found while searching
         self.solutions = []
 
-    def search(self):
+    def single_search(self, search_time=100):
         """
         This is the main use case of the MonteCarlo class. It runs the MCTS
         algorithm for a particular starting state (`self.root`). It will return
         a list of solutions it finds (if any).
         """
-        # First, generate the search tree and all its stats
-        timeout = time() + self.search_time
+        timeout = time() + search_time
         while time() < timeout:
             print("Running search loop {}".format(self.num_loops + 1), end="\r")
             leaf_state, visited = self.select()
@@ -114,21 +108,29 @@ class MonteCarlo:
             score, solution = self.simulate(leaf_state, visited)
             # If the rollout found a solution, add it to the list
             if solution:
-                self.solutions.append(" ".join([str(v[1]) for v in visited] + solution))
-                print("Solution found:")
-                print(self.solutions[-1])
+                self.solutions.append(" ".join([str(v[1]) for v in visited] + list(solution)))
             self.update(visited, score)
             self.num_loops += 1
         print("Finished searching. Number of loops was {}".format(self.num_loops))
-        # Then choose a move based on the information in the tree
-        #key = self.root.hashable_repr()
-        #moves = self.nodes[key].edges
-        #best_move = max(moves, key=lambda m : moves[m].value)
-        #for e in moves.values():
-            #print(e)
-        #print("Best move's value was {}".format(moves[best_move].value))
-        #return best_move
         return self.solutions
+
+    def choose_move(self, search_time=2, search_depth=10):
+        timeout = time() + search_time
+        num_loops = 0
+        while time() < timeout:
+            leaf_state, visited = self.select()
+            self.expand(leaf_state)
+            sim_depth = search_depth - len(visited)
+            score, solution = self.simulate(leaf_state, visited, sim_depth)
+            if solution:
+                self.solutions.append(" ".join([str(v[1]) for v in visited] + list(solution)))
+            self.update(visited, score)
+            num_loops += 1
+        key = self.root.hashable_repr()
+        moves = self.nodes[key].edges
+        best_move = max(moves, key=lambda m : moves[m].value)
+        return best_move
+
 
     def select(self):
         """
@@ -145,7 +147,6 @@ class MonteCarlo:
         count = 1
         invalid = set()
         while current_state.hashable_repr() in self.nodes:
-            #print("Making selection move number {}".format(count))
             # Get valid moves
             moves = [m for m in current_state.legal_moves() if str(m) not in invalid]
             edges = self.nodes[current_state.hashable_repr()].edges
@@ -176,25 +177,26 @@ class MonteCarlo:
         """
         self._add_to_tree(state)
 
-    def simulate(self, state, visited):
+    def simulate(self, state, visited, depth=None):
         """
         Plays out the game from a newly expanded node.
         """
-        # TODO: Prevent this from looping
-        # might be best to switch rollout_moves to a dict keyed by the state
-        # although then the moves wouldn't be in order... Could use collections.ordered_dict
+        if not depth: depth = self.rollout_depth
         rollout_moves = OrderedDict()
         max_value = self.evaluate_state(state)
-        for step in range(self.rollout_depth):
+        for step in range(depth):
             if state.is_solved():
                 return max_value, rollout_moves.values()
-            next_move = self.rollout(state=state)
+            next_move = self.rollout(state=state, history=rollout_moves)
             state.apply_move(next_move)
             rollout_moves[state.hashable_repr()] = str(next_move)
             max_value = max(max_value, self.evaluate_state(state))
             if max_value > self.best_state_value:
                 self.best_state_value = max_value
-                self.best_state_moves = " ".join([str(v[1]) for v in visited] + ["*"] + rollout_moves.values())
+                self.best_state_moves = " ".join([str(v[1]) for v in visited]
+                                                + ["*"]
+                                                + list(rollout_moves.values())
+                                                )
                 self.best_state_str = str(state)
         return max_value, None
 
@@ -242,20 +244,39 @@ if __name__ == "__main__":
     import mincube as rubiks
     import valuenetwork as valnet
     import slnetwork as polnet
-    from rollouts import policy_rollout
+    import rollouts
 
-    state_value = lambda s : 1 / valnet.evaluate(s)
+    r = rollouts.ProbabilisticPolicyRollout()
 
-    # Scramble taken from qqtimer
-    #scramble = "R' B U B U B' D' F L B2 L2 B2 U2 D F2 B2 U' L2 D L2"
-    scramble = "R' B U B U B' D'"
+    nb_trials = 50
+    for scramble_len in range(11, 15):
+        nb_successes = 0
+        for trial in range(nb_trials):
+            print("Running trial {}".format(trial + 1), end="\r")
+            scramble = rubiks.get_scramble(scramble_len)
+            cube = rubiks.Cube(alg=scramble)
+            moves_made = []
+            while len(moves_made) < (scramble_len * 2):
+                mc = MonteCarlo(cube, valnet.evaluate, polnet.evaluate, rollout_type=r)
+                move = mc.choose_move(search_time=1)
+                cube.apply_move(move)
+                moves_made.append(move)
+                if cube.is_solved():
+                    nb_successes += 1
+                    break
+            #print("Scramble: {}".format(scramble))
+            #print("Moves made: {}".format(" ".join([str(m) for m in moves_made])))
+        print("Depth {}:".format(scramble_len).ljust(10), end="")
+        print("{}%".format((nb_successes / nb_trials) * 100).ljust(10))
+    quit()
 
-    cube = rubiks.Cube(alg=scramble)
 
-    mc = MonteCarlo(cube, state_value, polnet.evaluate, rollout_type=policy_rollout)
-    solutions = mc.search()
+
+
+    solutions = mc.single_search()
+    print("Scramble was: {}".format(scramble))
     if solutions:
-        for sol in sorted(solutions, key=lambda x : len(x))[:5]:
+        for sol in sorted(solutions, key=len)[:5]:
             print("{} ({})".format(sol, sol.count(" ") + 1))
     else:
         print("No solutions found.")
